@@ -23,6 +23,7 @@ from . import views
 from django.contrib.auth import views as auth_views
 from django.views.static import serve
 from django.views.generic import TemplateView
+from rest_framework_simplejwt.views import TokenRefreshView
 
 
 urlpatterns = [
@@ -31,6 +32,7 @@ urlpatterns = [
     path('auth/login/',   views.LoginView.as_view(),  name='login'),
     path('auth/logout/',  views.LogoutView.as_view(), name='logout'),
     path('auth/me/',      views.MeView.as_view(),     name='me'),
+    path('auth/token/refresh/', TokenRefreshView.as_view(), name='token-refresh'),
 
     # ── Tags ──────────────────────────────────────────────────────────────────
     path('tags/',         views.TagListCreateView.as_view(), name='tag-list'),

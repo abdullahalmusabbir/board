@@ -1,4 +1,6 @@
-from django.contrib.auth import authenticate, login, logout
+from django.contrib.auth import authenticate
+from rest_framework_simplejwt.tokens import RefreshToken
+from rest_framework_simplejwt.exceptions import TokenError
 from django.contrib.auth.models import User
 from django.shortcuts import get_object_or_404
 
@@ -68,11 +70,17 @@ class LoginView(APIView):
                 status=status.HTTP_403_FORBIDDEN
             )
 
-        login(request, user)
-        set_profile_active(user, True)      
+        # ✅ login(request, user) সরিয়ে JWT token generate করো
+        refresh = RefreshToken.for_user(user)
+        set_profile_active(user, True)
 
         return Response(
-            {'message': 'Login successful.', 'user': user_data(user)},
+            {
+                'message'      : 'Login successful.',
+                'access'       : str(refresh.access_token),
+                'refresh'      : str(refresh),
+                'user'         : user_data(user),
+            },
             status=status.HTTP_200_OK
         )
 
@@ -81,10 +89,31 @@ class LogoutView(APIView):
     permission_classes = [IsAuthenticated]
 
     def post(self, request):
-        set_profile_active(request.user, False)   
-        logout(request)
-        return Response({'message': 'Logged out successfully.'}, status=status.HTTP_200_OK)
+        refresh_token = request.data.get('refresh')
 
+        if not refresh_token:
+            return Response(
+                {'error': 'Refresh token is required.'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        try:
+            # ✅ Token blacklist করো
+            token = RefreshToken(refresh_token)
+            token.blacklist()
+        except TokenError:
+            return Response(
+                {'error': 'Invalid or expired token.'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        set_profile_active(request.user, False)
+        # ✅ logout(request) আর লাগবে না
+
+        return Response(
+            {'message': 'Logged out successfully.'},
+            status=status.HTTP_200_OK
+        )
 
 class MeView(APIView):
     permission_classes = [IsAuthenticated]
