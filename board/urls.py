@@ -28,7 +28,8 @@ from rest_framework_simplejwt.views import TokenRefreshView
 
 urlpatterns = [
     path('iloveumusabbir/', admin.site.urls),
-        # ── Auth ──────────────────────────────────────────────────────────────────
+    # ── Auth ──────────────────────────────────────────────────────────────────
+    path('auth/signup/',  views.SignupView.as_view(),   name='signup'),    
     path('auth/login/',   views.LoginView.as_view(),  name='login'),
     path('auth/logout/',  views.LogoutView.as_view(), name='logout'),
     path('auth/me/',      views.MeView.as_view(),     name='me'),

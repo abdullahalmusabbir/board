@@ -115,6 +115,58 @@ class LogoutView(APIView):
             status=status.HTTP_200_OK
         )
 
+class SignupView(APIView):
+    permission_classes = [AllowAny]
+
+    def post(self, request):
+        username   = request.data.get('username', '').strip()
+        email      = request.data.get('email', '').strip()
+        password   = request.data.get('password', '')
+        first_name = request.data.get('first_name', '').strip()
+        last_name  = request.data.get('last_name', '').strip()
+
+        # ── Validation ──────────────────────────────────────────
+        if not username or not email or not password:
+            return Response(
+                {'error': 'Username, email and password are required.'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        if len(password) < 6:
+            return Response(
+                {'error': 'Password must be at least 6 characters.'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        if User.objects.filter(username=username).exists():
+            return Response(
+                {'error': 'Username already taken.'},
+                status=status.HTTP_409_CONFLICT
+            )
+
+        if User.objects.filter(email=email).exists():
+            return Response(
+                {'error': 'Email already registered.'},
+                status=status.HTTP_409_CONFLICT
+            )
+
+        # ── Create User ─────────────────────────────────────────
+        user = User.objects.create_user(
+            username   = username,
+            email      = email,
+            password   = password,
+            first_name = first_name,
+            last_name  = last_name,
+        )
+
+        # ── Create Profile ──────────────────────────────────────
+        Profile.objects.create(user=user, active=False)
+
+        return Response(
+            {'message': 'Account created successfully. Please login.'},
+            status=status.HTTP_201_CREATED
+        )        
+
 class MeView(APIView):
     permission_classes = [IsAuthenticated]
 
