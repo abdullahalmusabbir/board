@@ -14,6 +14,12 @@ from boards.models import *
 from boards.serializers import *
 from google.oauth2 import id_token
 from google.auth.transport import requests as google_requests
+import random
+import string
+from django.core.mail import send_mail
+from django.utils import timezone
+from datetime import timedelta
+from django.core.cache import cache
 
 class GoogleLoginView(APIView):
     permission_classes = [AllowAny]
@@ -75,6 +81,171 @@ class GoogleLoginView(APIView):
             return Response(
                 {'error': 'Invalid Google token.'},
                 status=status.HTTP_401_UNAUTHORIZED
+            )
+
+class ForgotPasswordRequestView(APIView):
+
+    permission_classes = [AllowAny]
+
+    def post(self, request):
+        email = request.data.get('email', '').strip()
+        
+        if not email:
+            return Response(
+                {'error': 'Email is required.'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        # User আছে কিনা check করো
+        try:
+            user = User.objects.get(email=email)
+        except User.DoesNotExist:
+            # Security এর জন্য same message দাও
+            return Response(
+                {'message': 'If this email exists, OTP has been sent.'},
+                status=status.HTTP_200_OK
+            )
+        
+        # 6 digit OTP generate করো
+        otp = ''.join(random.choices(string.digits, k=6))
+        
+        # Cache এ 10 মিনিটের জন্য save করো
+        cache_key = f"forgot_password_otp_{email}"
+        cache.set(cache_key, otp, timeout=600)  # 600 seconds = 10 minutes
+        
+        # Email পাঠাও
+        try:
+            send_mail(
+                subject='VisionBoard — Password Reset OTP',
+                message=f'''
+Hello {user.first_name or user.username},
+
+Your OTP for password reset is:
+
+{otp}
+
+This OTP will expire in 10 minutes.
+
+If you did not request this, please ignore this email.
+
+— VisionBoard Team
+                ''',
+                from_email=None,  # settings.py থেকে নেবে
+                recipient_list=[email],
+                fail_silently=False,
+            )
+        except Exception as e:
+            return Response(
+                {'error': 'Failed to send email. Please try again.'},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+        
+        return Response(
+            {'message': 'If this email exists, OTP has been sent.'},
+            status=status.HTTP_200_OK
+        )
+
+
+class ForgotPasswordVerifyOTPView(APIView):
+
+    permission_classes = [AllowAny]
+
+    def post(self, request):
+        email = request.data.get('email', '').strip()
+        otp = request.data.get('otp', '').strip()
+        
+        if not email or not otp:
+            return Response(
+                {'error': 'Email and OTP are required.'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        cache_key = f"forgot_password_otp_{email}"
+        stored_otp = cache.get(cache_key)
+        
+        if not stored_otp:
+            return Response(
+                {'error': 'OTP expired. Please request a new one.'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        if stored_otp != otp:
+            return Response(
+                {'error': 'Invalid OTP.'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        # OTP সঠিক — এখন reset token দাও
+        reset_token = ''.join(
+            random.choices(string.ascii_letters + string.digits, k=32)
+        )
+        
+        # OTP delete করো, reset token save করো
+        cache.delete(cache_key)
+        reset_key = f"forgot_password_reset_{email}"
+        cache.set(reset_key, reset_token, timeout=600)  # 10 minutes
+        
+        return Response(
+            {
+                'message': 'OTP verified.',
+                'reset_token': reset_token,
+            },
+            status=status.HTTP_200_OK
+        )
+
+
+class ForgotPasswordResetView(APIView):
+    
+    permission_classes = [AllowAny]
+
+    def post(self, request):
+        email = request.data.get('email', '').strip()
+        reset_token = request.data.get('reset_token', '').strip()
+        new_password = request.data.get('new_password', '')
+        
+        if not email or not reset_token or not new_password:
+            return Response(
+                {'error': 'Email, reset token and new password are required.'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        if len(new_password) < 6:
+            return Response(
+                {'error': 'Password must be at least 6 characters.'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        # Reset token verify করো
+        reset_key = f"forgot_password_reset_{email}"
+        stored_token = cache.get(reset_key)
+        
+        if not stored_token:
+            return Response(
+                {'error': 'Reset token expired. Please start over.'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        if stored_token != reset_token:
+            return Response(
+                {'error': 'Invalid reset token.'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        # Password update করো
+        try:
+            user = User.objects.get(email=email)
+            user.set_password(new_password)
+            user.save()
+            cache.delete(reset_key)
+            
+            return Response(
+                {'message': 'Password reset successful. Please login.'},
+                status=status.HTTP_200_OK
+            )
+        except User.DoesNotExist:
+            return Response(
+                {'error': 'User not found.'},
+                status=status.HTTP_404_NOT_FOUND
             )
 
 def set_profile_active(user, value: bool):

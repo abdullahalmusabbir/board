@@ -53,6 +53,19 @@ urlpatterns = [
     path('images/<int:image_pk>/polygons/',        views.PolygonListCreateView.as_view(), name='polygon-list'),
     path('images/<int:image_pk>/polygons/bulk/',   views.PolygonBulkSaveView.as_view(),   name='polygon-bulk'),
     path('polygons/<int:pk>/',                     views.PolygonDetailView.as_view(),     name='polygon-detail'),
+    
+    # ── Forgot Password ───────────────────────────────────────────────────────
+    path('auth/forgot-password/', 
+        views.ForgotPasswordRequestView.as_view(), 
+        name='forgot-password'),
+
+    path('auth/forgot-password/verify/', 
+        views.ForgotPasswordVerifyOTPView.as_view(), 
+        name='forgot-password-verify'),
+
+    path('auth/forgot-password/reset/', 
+        views.ForgotPasswordResetView.as_view(), 
+        name='forgot-password-reset'),
 ]
 urlpatterns += [
     re_path(r'^media/(?P<path>.*)$', serve, {'document_root': settings.MEDIA_ROOT}),
