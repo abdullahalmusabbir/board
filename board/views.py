@@ -12,8 +12,70 @@ from rest_framework.parsers import MultiPartParser, FormParser
 
 from boards.models import *
 from boards.serializers import *
+from google.oauth2 import id_token
+from google.auth.transport import requests as google_requests
 
-
+class GoogleLoginView(APIView):
+    permission_classes = [AllowAny]
+    
+    def post(self, request):
+        credential = request.data.get('credential')
+        if not credential:
+            return Response(
+                {'error': 'Credential is required.'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        try:
+            # Google token verify করো
+            idinfo = id_token.verify_oauth2_token(
+                credential,
+                google_requests.Request(),
+                "227007777660-5ihtn2ia72211l06bgtq3ppgrn53sn3a.apps.googleusercontent.com"
+            )
+            
+            email = idinfo.get('email')
+            first_name = idinfo.get('given_name', '')
+            last_name = idinfo.get('family_name', '')
+            
+            # User get অথবা create করো
+            try:
+                user = User.objects.get(email=email)
+            except User.DoesNotExist:
+                # নতুন user তৈরি করো
+                username = email.split('@')[0]
+                # username unique করো
+                base_username = username
+                counter = 1
+                while User.objects.filter(username=username).exists():
+                    username = f"{base_username}{counter}"
+                    counter += 1
+                
+                user = User.objects.create_user(
+                    username=username,
+                    email=email,
+                    password=None,  # Google user এর password নেই
+                    first_name=first_name,
+                    last_name=last_name,
+                )
+                Profile.objects.create(user=user, active=True)
+            
+            # JWT token তৈরি করো
+            refresh = RefreshToken.for_user(user)
+            set_profile_active(user, True)
+            
+            return Response({
+                'message': 'Login successful.',
+                'access': str(refresh.access_token),
+                'refresh': str(refresh),
+                'user': user_data(user),
+            }, status=status.HTTP_200_OK)
+            
+        except ValueError:
+            return Response(
+                {'error': 'Invalid Google token.'},
+                status=status.HTTP_401_UNAUTHORIZED
+            )
 
 def set_profile_active(user, value: bool):
 
