@@ -62,11 +62,11 @@ MIDDLEWARE = [
 
 CORS_ALLOWED_ORIGINS = [
     "http://localhost:3000",
-    "https://boardcanvas-rfukbd18t-abdullah-al-musabbirs-projects.vercel.app",
+    "https://boardcanvas.vercel.app",
 ]
 CSRF_TRUSTED_ORIGINS = [
     "http://localhost:3000",
-    "https://boardcanvas-rfukbd18t-abdullah-al-musabbirs-projects.vercel.app",
+    "https://boardcanvas.vercel.app",
 ]
 
 ROOT_URLCONF = 'board.urls'
